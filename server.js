@@ -6,7 +6,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -169,7 +169,13 @@ app.post('/api/compile', async (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  console.log('Health check requested');
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    port: PORT,
+    env: process.env.NODE_ENV || 'development'
+  });
 });
 
 app.get('/api/java-version', async (req, res) => {
@@ -209,6 +215,7 @@ app.get('/api/java-version', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Java Compiler Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Java Compiler Server running on port ${PORT}`);
+  console.log(`Health check available at /api/health`);
 });
