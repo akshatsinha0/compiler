@@ -229,9 +229,13 @@ app.get('/api/java-version', async (req, res) => {
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
+  const isLocal = PORT === 3000;
+  const baseUrl = isLocal ? `http://localhost:${PORT}` : `https://compiler-production-08b5.up.railway.app`;
+  
   console.log(`Java Compiler Server running on port ${PORT}`);
-  console.log(`Health check available at /api/health`);
+  console.log(`Access your app at: ${baseUrl}`);
+  console.log(`Health check available at ${baseUrl}/api/health`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Working directory: ${process.cwd()}`);
   
@@ -255,5 +259,13 @@ app.listen(PORT, '0.0.0.0', () => {
   
   javacTest.on('error', (err) => {
     console.error('Javac test error:', err.message);
+  });
+});
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
   });
 });
