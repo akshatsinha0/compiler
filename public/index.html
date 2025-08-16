@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Online Compiler</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nata+Sans:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+</head>
+
+<body>
+    <div class="top-bar">
+        <h1>Java Online Compiler <span class="version-info">(Java 24)</span></h1>
+        <div class="header-controls">
+            <div class="dropdown">
+                <span class="dropdown-trigger">Font Size</span>
+                <div class="dropdown-content">
+                    <div class="dropdown-item" data-target="editor">Code Editor</div>
+                    <div class="dropdown-item" data-target="output">Output</div>
+                </div>
+            </div>
+            <button id="runBtn" class="btn btn-primary">
+                <span class="btn-text">Run Code</span>
+                <span class="btn-loading" style="display: none;">
+                    <div class="equalizer">
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+                </span>
+            </button>
+            <button id="clearBtn" class="btn btn-secondary">Clear</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="editor-section" id="editorSection">
+            <div id="editor" class="editor"></div>
+        </div>
+
+        <div class="resizer" id="resizer"></div>
+
+        <div class="output-section" id="outputSection">
+            <div class="section-header">
+                <h3>Output</h3>
+                <button id="clearOutputBtn" class="btn btn-small">Clear Output</button>
+            </div>
+            <div id="output" class="output">
+                <div class="output-placeholder">Run your Java code to see output here...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="fontSizeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Select Font Size</h3>
+                <span class="close" id="closeModal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="font-size-options">
+                    <div class="font-size-option" data-size="12">12px</div>
+                    <div class="font-size-option" data-size="14">14px</div>
+                    <div class="font-size-option" data-size="16">16px</div>
+                    <div class="font-size-option" data-size="18">18px</div>
+                    <div class="font-size-option" data-size="20">20px</div>
+                    <div class="font-size-option" data-size="22">22px</div>
+                    <div class="font-size-option" data-size="24">24px</div>
+                </div>
+                <div id="fontAppliedMessage" class="font-applied-message" style="display: none;">
+                    Font size applied!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
