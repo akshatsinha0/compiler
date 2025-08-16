@@ -174,11 +174,18 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     timestamp: new Date().toISOString(),
     port: PORT,
-    env: process.env.NODE_ENV || 'development'
+    env: process.env.NODE_ENV || 'development',
+    javaHome: process.env.JAVA_HOME,
+    workingDir: process.cwd()
   });
 });
 
+app.get('/test', (req, res) => {
+  res.send('<h1>Server is running!</h1><p>Java Compiler is working</p>');
+});
+
 app.get('/api/java-version', async (req, res) => {
+  console.log('Java version check requested');
   try {
     const java = spawn('java', ['--version']);
     
@@ -194,20 +201,27 @@ app.get('/api/java-version', async (req, res) => {
     });
 
     java.on('close', (code) => {
+      console.log(`Java version check completed with code: ${code}`);
       res.json({
         success: code === 0,
         version: output.trim() || error.trim(),
-        error: code !== 0 ? error.trim() : ''
+        error: code !== 0 ? error.trim() : '',
+        javaHome: process.env.JAVA_HOME,
+        path: process.env.PATH
       });
     });
 
     java.on('error', (err) => {
+      console.error('Java version check error:', err);
       res.json({
         success: false,
-        error: 'Java not found: ' + err.message
+        error: 'Java not found: ' + err.message,
+        javaHome: process.env.JAVA_HOME,
+        path: process.env.PATH
       });
     });
   } catch (error) {
+    console.error('Java version check exception:', error);
     res.json({
       success: false,
       error: 'Failed to check Java version: ' + error.message
@@ -218,4 +232,28 @@ app.get('/api/java-version', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Java Compiler Server running on port ${PORT}`);
   console.log(`Health check available at /api/health`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Working directory: ${process.cwd()}`);
+  
+  // Test Java availability
+  const { spawn } = require('child_process');
+  const javaTest = spawn('java', ['--version']);
+  
+  javaTest.on('close', (code) => {
+    console.log(`Java test exit code: ${code}`);
+  });
+  
+  javaTest.on('error', (err) => {
+    console.error('Java test error:', err.message);
+  });
+  
+  const javacTest = spawn('javac', ['--version']);
+  
+  javacTest.on('close', (code) => {
+    console.log(`Javac test exit code: ${code}`);
+  });
+  
+  javacTest.on('error', (err) => {
+    console.error('Javac test error:', err.message);
+  });
 });
