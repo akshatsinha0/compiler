@@ -64,11 +64,24 @@ const executeJava = (code) => {
     });
 
     docker.on('close', (code) => {
+      console.log(`Docker process exited with code: ${code}`);
+      console.log(`Docker stdout: ${output}`);
+      console.log(`Docker stderr: ${error}`);
       resolve({
         success: code === 0,
         output: output.trim(),
-        error: error.trim(),
+        error: error.trim() || `Docker process exited with code ${code}`,
         exitCode: code
+      });
+    });
+
+    docker.on('error', (err) => {
+      console.error('Docker spawn error:', err);
+      resolve({
+        success: false,
+        output: '',
+        error: `Docker error: ${err.message}`,
+        exitCode: -1
       });
     });
 
