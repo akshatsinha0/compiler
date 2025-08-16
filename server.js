@@ -32,62 +32,119 @@ const executeJava = (code) => {
     const tempDir = path.join(__dirname, 'temp');
     
     if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir);
+      fs.mkdirSync(tempDir, { recursive: true });
     }
 
     const className = extractClassName(code);
     const fileName = `${className}.java`;
+    const filePath = path.join(tempDir, fileName);
 
-    const dockerCommand = [
-      'run', '--rm', '-i',
-      '--memory=128m',
-      '--cpus=0.5',
-      '--network=none',
-      '--read-only',
-      '--tmpfs=/tmp:exec',
-      'eclipse-temurin:24-alpine',
-      'sh', '-c',
-      `cat > /tmp/${fileName} && cd /tmp && timeout 10s javac ${fileName} && timeout 10s java ${className}`
-    ];
+    try {
+      // Write Java code to file
+      fs.writeFileSync(filePath, code);
 
-    const docker = spawn('docker', dockerCommand);
-    
-    let output = '';
-    let error = '';
-
-    docker.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    docker.stderr.on('data', (data) => {
-      error += data.toString();
-    });
-
-    docker.on('close', (code) => {
-      console.log(`Docker process exited with code: ${code}`);
-      console.log(`Docker stdout: ${output}`);
-      console.log(`Docker stderr: ${error}`);
-      resolve({
-        success: code === 0,
-        output: output.trim(),
-        error: error.trim() || `Docker process exited with code ${code}`,
-        exitCode: code
+      // Compile Java code
+      const javac = spawn('javac', [filePath], {
+        cwd: tempDir,
+        timeout: 10000
       });
-    });
 
-    docker.on('error', (err) => {
-      console.error('Docker spawn error:', err);
+      let compileOutput = '';
+      let compileError = '';
+
+      javac.stdout.on('data', (data) => {
+        compileOutput += data.toString();
+      });
+
+      javac.stderr.on('data', (data) => {
+        compileError += data.toString();
+      });
+
+      javac.on('close', (compileCode) => {
+        if (compileCode !== 0) {
+          // Compilation failed
+          cleanup(tempDir, jobId);
+          resolve({
+            success: false,
+            output: '',
+            error: compileError || 'Compilation failed',
+            exitCode: compileCode
+          });
+          return;
+        }
+
+        // Run Java code
+        const java = spawn('java', ['-cp', tempDir, className], {
+          cwd: tempDir,
+          timeout: 10000
+        });
+
+        let runOutput = '';
+        let runError = '';
+
+        java.stdout.on('data', (data) => {
+          runOutput += data.toString();
+        });
+
+        java.stderr.on('data', (data) => {
+          runError += data.toString();
+        });
+
+        java.on('close', (runCode) => {
+          cleanup(tempDir, jobId);
+          resolve({
+            success: runCode === 0,
+            output: runOutput.trim(),
+            error: runError.trim(),
+            exitCode: runCode
+          });
+        });
+
+        java.on('error', (err) => {
+          cleanup(tempDir, jobId);
+          resolve({
+            success: false,
+            output: '',
+            error: `Runtime error: ${err.message}`,
+            exitCode: -1
+          });
+        });
+      });
+
+      javac.on('error', (err) => {
+        cleanup(tempDir, jobId);
+        resolve({
+          success: false,
+          output: '',
+          error: `Compilation error: ${err.message}`,
+          exitCode: -1
+        });
+      });
+
+    } catch (err) {
+      cleanup(tempDir, jobId);
       resolve({
         success: false,
         output: '',
-        error: `Docker error: ${err.message}`,
+        error: `File system error: ${err.message}`,
         exitCode: -1
       });
-    });
-
-    docker.stdin.write(code);
-    docker.stdin.end();
+    }
   });
+};
+
+const cleanup = (tempDir, jobId) => {
+  try {
+    const files = fs.readdirSync(tempDir);
+    files.forEach(file => {
+      const filePath = path.join(tempDir, file);
+      if (fs.statSync(filePath).isFile()) {
+        fs.unlinkSync(filePath);
+      }
+    });
+  } catch (err) {
+    console.error('Cleanup error:', err);
+  }
 };
 
 app.post('/api/compile', async (req, res) => {
@@ -117,31 +174,31 @@ app.get('/api/health', (req, res) => {
 
 app.get('/api/java-version', async (req, res) => {
   try {
-    const dockerCommand = [
-      'run', '--rm',
-      'eclipse-temurin:24-alpine',
-      'java', '--version'
-    ];
-
-    const { spawn } = require('child_process');
-    const docker = spawn('docker', dockerCommand);
+    const java = spawn('java', ['--version']);
     
     let output = '';
     let error = '';
 
-    docker.stdout.on('data', (data) => {
+    java.stdout.on('data', (data) => {
       output += data.toString();
     });
 
-    docker.stderr.on('data', (data) => {
+    java.stderr.on('data', (data) => {
       error += data.toString();
     });
 
-    docker.on('close', (code) => {
+    java.on('close', (code) => {
       res.json({
         success: code === 0,
-        version: output.trim(),
-        error: error.trim()
+        version: output.trim() || error.trim(),
+        error: code !== 0 ? error.trim() : ''
+      });
+    });
+
+    java.on('error', (err) => {
+      res.json({
+        success: false,
+        error: 'Java not found: ' + err.message
       });
     });
   } catch (error) {
