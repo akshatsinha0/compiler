@@ -31,7 +31,17 @@ require(['vs/editor/editor.main'], function () {
         matchBrackets: 'always',
         autoIndent: 'full',
         formatOnPaste: true,
-        formatOnType: true
+        formatOnType: true,
+        lineHeight: 20,
+        padding: { top: 10, bottom: 10 },
+        cursorBlinking: 'smooth',
+        cursorSmoothCaretAnimation: 'on',
+        smoothScrolling: true,
+        renderWhitespace: 'selection',
+        guides: {
+            indentation: true,
+            bracketPairs: true
+        }
     });
 
     setupEventListeners();
@@ -41,11 +51,15 @@ function setupEventListeners() {
     const runBtn = document.getElementById('runBtn');
     const clearBtn = document.getElementById('clearBtn');
     const clearOutputBtn = document.getElementById('clearOutputBtn');
+    const testAnimationBtn = document.getElementById('testAnimationBtn');
     const output = document.getElementById('output');
 
     runBtn.addEventListener('click', runCode);
     clearBtn.addEventListener('click', clearEditor);
     clearOutputBtn.addEventListener('click', clearOutput);
+    testAnimationBtn.addEventListener('click', testAnimation);
+    
+    setupThemeSwitcher();
 
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -72,7 +86,11 @@ async function runCode() {
     }
 
     runBtn.disabled = true;
+    console.log('Button disabled:', runBtn.disabled);
     showOutput('Compiling and running your Java code...', 'info');
+
+    const startTime = Date.now();
+    const minAnimationTime = 1500;
 
     try {
         const response = await fetch('/api/compile', {
@@ -93,7 +111,13 @@ async function runCode() {
     } catch (error) {
         showOutput('Network error: Unable to connect to server', 'error');
     } finally {
-        runBtn.disabled = false;
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, minAnimationTime - elapsedTime);
+        
+        setTimeout(() => {
+            runBtn.disabled = false;
+            console.log('Button re-enabled:', runBtn.disabled);
+        }, remainingTime);
     }
 }
 
@@ -123,6 +147,20 @@ function clearOutput() {
     const output = document.getElementById('output');
     output.innerHTML = '<div class="output-placeholder">Run your Java code to see output here...</div>';
     output.className = 'output';
+}
+
+function testAnimation() {
+    const runBtn = document.getElementById('runBtn');
+    console.log('Testing animation...');
+    console.log('Button disabled state before:', runBtn.disabled);
+    
+    runBtn.disabled = true;
+    console.log('Button disabled state after:', runBtn.disabled);
+    
+    setTimeout(() => {
+        runBtn.disabled = false;
+        console.log('Button re-enabled');
+    }, 3000);
 }
 
 function setupResizer() {
@@ -159,10 +197,41 @@ function setupResizer() {
     }
 }
 
+function setupThemeSwitcher() {
+    const themeDropdownItems = document.querySelectorAll('.dropdown-item[data-theme]');
+    
+    themeDropdownItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            const theme = e.target.dataset.theme;
+            if (editor) {
+                monaco.editor.setTheme(theme);
+                console.log('Theme changed to:', theme);
+                
+                const themeName = e.target.textContent;
+                showThemeChangeMessage(themeName);
+            }
+        });
+    });
+}
+
+function showThemeChangeMessage(themeName) {
+    const output = document.getElementById('output');
+    const currentContent = output.innerHTML;
+    
+    const message = `<div style="color: #28a745; font-style: italic; margin-bottom: 10px;">Theme changed to: ${themeName}</div>`;
+    output.innerHTML = message + currentContent;
+    
+    setTimeout(() => {
+        if (output.querySelector('div')) {
+            output.querySelector('div').remove();
+        }
+    }, 2000);
+}
+
 function setupFontSizeModal() {
     const modal = document.getElementById('fontSizeModal');
     const closeModal = document.getElementById('closeModal');
-    const dropdownItems = document.querySelectorAll('.dropdown-item');
+    const dropdownItems = document.querySelectorAll('.dropdown-item[data-target]');
     const fontSizeOptions = document.querySelectorAll('.font-size-option');
     const fontAppliedMessage = document.getElementById('fontAppliedMessage');
     const modalTitle = document.getElementById('modalTitle');

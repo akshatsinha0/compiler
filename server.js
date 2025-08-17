@@ -17,7 +17,6 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
-// Basic error handling
 app.use((err, req, res, next) => {
   console.error('Express error:', err);
   res.status(500).json({ error: 'Internal server error' });
@@ -51,10 +50,8 @@ const executeJava = (code) => {
     const filePath = path.join(tempDir, fileName);
 
     try {
-      // Write Java code to file
       fs.writeFileSync(filePath, code);
 
-      // Compile Java code
       const javac = spawn('javac', [filePath], {
         cwd: tempDir,
         timeout: 10000
@@ -73,7 +70,6 @@ const executeJava = (code) => {
 
       javac.on('close', (compileCode) => {
         if (compileCode !== 0) {
-          // Compilation failed
           cleanup(tempDir, jobId);
           resolve({
             success: false,
@@ -84,7 +80,6 @@ const executeJava = (code) => {
           return;
         }
 
-        // Run Java code
         const java = spawn('java', ['-cp', tempDir, className], {
           cwd: tempDir,
           timeout: 10000
@@ -284,7 +279,6 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   }, 1000);
 });
 
-// Error handling
 server.on('error', (err) => {
   console.error('❌ Server error:', err);
 });
