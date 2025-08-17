@@ -44,7 +44,15 @@ require(['vs/editor/editor.main'], function () {
         }
     });
 
+    // Add content change listener for automatic filename detection
+    editor.onDidChangeModelContent(() => {
+        updateFilenameFromCode();
+    });
+
     setupEventListeners();
+    
+    // Initial filename update
+    updateFilenameFromCode();
 });
 
 function setupEventListeners() {
@@ -52,12 +60,44 @@ function setupEventListeners() {
     const clearBtn = document.getElementById('clearBtn');
     const clearOutputBtn = document.getElementById('clearOutputBtn');
     const testAnimationBtn = document.getElementById('testAnimationBtn');
+    const renameBtn = document.getElementById('renameBtn');
     const output = document.getElementById('output');
 
-    runBtn.addEventListener('click', runCode);
-    clearBtn.addEventListener('click', clearEditor);
-    clearOutputBtn.addEventListener('click', clearOutput);
-    testAnimationBtn.addEventListener('click', testAnimation);
+    // Add event listeners with error handling
+    if (runBtn) runBtn.addEventListener('click', runCode);
+    if (clearBtn) clearBtn.addEventListener('click', clearEditor);
+    if (clearOutputBtn) clearOutputBtn.addEventListener('click', clearOutput);
+    if (testAnimationBtn) testAnimationBtn.addEventListener('click', testAnimation);
+    
+    // Fix rename button event listener
+    if (renameBtn) {
+        console.log('Rename button found, adding event listener');
+        renameBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Rename button clicked!');
+            renameCurrentFile();
+        });
+    } else {
+        console.error('Rename button not found!');
+    }
+    
+    // Add test rename button
+    const testRenameBtn = document.getElementById('testRenameBtn');
+    if (testRenameBtn) {
+        console.log('Test rename button found, adding event listener');
+        testRenameBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Test rename button clicked!');
+            showOutput('Testing rename functionality...', 'info');
+            setTimeout(() => {
+                renameCurrentFile();
+            }, 500);
+        });
+    } else {
+        console.error('Test rename button not found!');
+    }
     
     setupThemeSwitcher();
 
@@ -65,6 +105,11 @@ function setupEventListeners() {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
             e.preventDefault();
             runCode();
+        }
+        
+        if (e.key === 'F2') {
+            e.preventDefault();
+            renameCurrentFile();
         }
     });
 
@@ -109,7 +154,8 @@ async function runCode() {
             showOutput(result.error || 'Compilation or runtime error occurred', 'error');
         }
     } catch (error) {
-        showOutput('Network error: Unable to connect to server', 'error');
+        console.error('Network error:', error);
+        showOutput('Network error: Unable to connect to server. Make sure you are accessing the app through http://localhost:3000', 'error');
     } finally {
         const elapsedTime = Date.now() - startTime;
         const remainingTime = Math.max(0, minAnimationTime - elapsedTime);
@@ -140,6 +186,11 @@ function clearEditor() {
 }`;
         editor.setValue(defaultCode);
         editor.focus();
+        
+        // Update filename after clearing
+        setTimeout(() => {
+            updateFilenameFromCode();
+        }, 100);
     }
 }
 
@@ -161,6 +212,98 @@ function testAnimation() {
         runBtn.disabled = false;
         console.log('Button re-enabled');
     }, 3000);
+}
+
+function updateFilenameFromCode() {
+    if (!editor) return;
+    
+    const code = editor.getValue();
+    const className = extractClassNameFromCode(code);
+    
+    if (className) {
+        const activeTab = document.querySelector('.tab.active');
+        if (activeTab) {
+            const tabTitle = activeTab.querySelector('.tab-title');
+            if (tabTitle) {
+                const newFileName = `${className}.java`;
+                if (tabTitle.textContent !== newFileName) {
+                    tabTitle.textContent = newFileName;
+                    activeTab.dataset.fileId = className;
+                    console.log(`Auto-updated filename to: ${newFileName}`);
+                }
+            }
+        }
+    }
+}
+
+function extractClassNameFromCode(code) {
+    // Look for public class declaration
+    const publicClassMatch = code.match(/public\s+class\s+(\w+)/);
+    if (publicClassMatch) {
+        return publicClassMatch[1];
+    }
+    
+    // Look for regular class declaration
+    const classMatch = code.match(/class\s+(\w+)/);
+    if (classMatch) {
+        return classMatch[1];
+    }
+    
+    // Look for enum declaration
+    const enumMatch = code.match(/public\s+enum\s+(\w+)/);
+    if (enumMatch) {
+        return enumMatch[1];
+    }
+    
+    // Look for interface declaration
+    const interfaceMatch = code.match(/public\s+interface\s+(\w+)/);
+    if (interfaceMatch) {
+        return interfaceMatch[1];
+    }
+    
+    return null;
+}
+
+function renameCurrentFile() {
+    console.log('renameCurrentFile function called');
+    
+    const activeTab = document.querySelector('.tab.active');
+    console.log('Active tab found:', activeTab);
+    
+    if (!activeTab) {
+        showOutput('No active file to rename', 'error');
+        return;
+    }
+    
+    const tabTitle = activeTab.querySelector('.tab-title');
+    console.log('Tab title element found:', tabTitle);
+    
+    if (!tabTitle) {
+        showOutput('Could not find tab title element', 'error');
+        return;
+    }
+    
+    const currentFileName = tabTitle.textContent;
+    console.log('Current filename:', currentFileName);
+    
+    const newFileName = prompt('Enter new file name:', currentFileName);
+    console.log('New filename entered:', newFileName);
+    
+    if (newFileName && newFileName.trim() !== '' && newFileName !== currentFileName) {
+        let finalFileName = newFileName.trim();
+        if (!finalFileName.endsWith('.java')) {
+            finalFileName = finalFileName + '.java';
+        }
+        
+        tabTitle.textContent = finalFileName;
+        activeTab.dataset.fileId = finalFileName.replace('.java', '');
+        
+        showOutput(`File renamed from "${currentFileName}" to "${finalFileName}"`, 'success');
+        
+        console.log(`File renamed: ${currentFileName} → ${finalFileName}`);
+    } else {
+        console.log('No rename performed - invalid input or same name');
+    }
 }
 
 function setupResizer() {

@@ -36,23 +36,40 @@ const extractClassName = (code) => {
   return 'Main';
 };
 
-const executeJava = (code) => {
+const executeJava = (code, files = null, debug = false) => {
   return new Promise((resolve) => {
     const jobId = uuidv4();
-    const tempDir = path.join(__dirname, 'temp');
+    const tempDir = path.join(__dirname, 'temp', jobId);
     
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    const className = extractClassName(code);
-    const fileName = `${className}.java`;
-    const filePath = path.join(tempDir, fileName);
+    const startTime = process.hrtime();
+    const startMemory = process.memoryUsage().heapUsed;
 
     try {
-      fs.writeFileSync(filePath, code);
+      let filesToCompile = [];
+      
+      if (files && files.length > 0) {
+        files.forEach(file => {
+          const filePath = path.join(tempDir, file.name);
+          fs.writeFileSync(filePath, file.content);
+          filesToCompile.push(filePath);
+        });
+      } else {
+        const className = extractClassName(code);
+        const fileName = `${className}.java`;
+        const filePath = path.join(tempDir, fileName);
+        fs.writeFileSync(filePath, code);
+        filesToCompile.push(filePath);
+      }
 
-      const javac = spawn('javac', [filePath], {
+      const mainClass = files && files.length > 0 ? 
+        extractClassName(files[0].content) : 
+        extractClassName(code);
+
+      const javac = spawn('javac', filesToCompile, {
         cwd: tempDir,
         timeout: 10000
       });
@@ -70,17 +87,25 @@ const executeJava = (code) => {
 
       javac.on('close', (compileCode) => {
         if (compileCode !== 0) {
+          const [executionTime] = process.hrtime(startTime);
+          const memoryUsed = process.memoryUsage().heapUsed - startMemory;
           cleanup(tempDir, jobId);
           resolve({
             success: false,
             output: '',
-            error: compileError || 'Compilation failed',
-            exitCode: compileCode
+            error: formatError(compileError || 'Compilation failed'),
+            exitCode: compileCode,
+            executionTime: executionTime * 1000,
+            memoryUsed: memoryUsed
           });
           return;
         }
 
-        const java = spawn('java', ['-cp', tempDir, className], {
+        const javaArgs = debug ? 
+          ['-Xdebug', '-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005', '-cp', tempDir, mainClass] :
+          ['-cp', tempDir, mainClass];
+
+        const java = spawn('java', javaArgs, {
           cwd: tempDir,
           timeout: 10000
         });
@@ -97,57 +122,73 @@ const executeJava = (code) => {
         });
 
         java.on('close', (runCode) => {
+          const [executionTime] = process.hrtime(startTime);
+          const memoryUsed = process.memoryUsage().heapUsed - startMemory;
           cleanup(tempDir, jobId);
           resolve({
             success: runCode === 0,
             output: runOutput.trim(),
-            error: runError.trim(),
-            exitCode: runCode
+            error: formatError(runError.trim()),
+            exitCode: runCode,
+            executionTime: executionTime * 1000,
+            memoryUsed: memoryUsed
           });
         });
 
         java.on('error', (err) => {
+          const [executionTime] = process.hrtime(startTime);
+          const memoryUsed = process.memoryUsage().heapUsed - startMemory;
           cleanup(tempDir, jobId);
           resolve({
             success: false,
             output: '',
-            error: `Runtime error: ${err.message}`,
-            exitCode: -1
+            error: formatError(`Runtime error: ${err.message}`),
+            exitCode: -1,
+            executionTime: executionTime * 1000,
+            memoryUsed: memoryUsed
           });
         });
       });
 
       javac.on('error', (err) => {
+        const [executionTime] = process.hrtime(startTime);
+        const memoryUsed = process.memoryUsage().heapUsed - startMemory;
         cleanup(tempDir, jobId);
         resolve({
           success: false,
           output: '',
-          error: `Compilation error: ${err.message}`,
-          exitCode: -1
+          error: formatError(`Compilation error: ${err.message}`),
+          exitCode: -1,
+          executionTime: executionTime * 1000,
+          memoryUsed: memoryUsed
         });
       });
 
     } catch (err) {
+      const [executionTime] = process.hrtime(startTime);
+      const memoryUsed = process.memoryUsage().heapUsed - startMemory;
       cleanup(tempDir, jobId);
       resolve({
         success: false,
         output: '',
-        error: `File system error: ${err.message}`,
-        exitCode: -1
+        error: formatError(`File system error: ${err.message}`),
+        exitCode: -1,
+        executionTime: executionTime * 1000,
+        memoryUsed: memoryUsed
       });
     }
   });
 };
 
+const formatError = (error) => {
+  return error.replace(/([^\s]+\.java):(\d+)/g, '$1:$2');
+};
+
 const cleanup = (tempDir, jobId) => {
   try {
-    const files = fs.readdirSync(tempDir);
-    files.forEach(file => {
-      const filePath = path.join(tempDir, file);
-      if (fs.statSync(filePath).isFile()) {
-        fs.unlinkSync(filePath);
-      }
-    });
+    if (fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   } catch (err) {
     console.error('Cleanup error:', err);
   }
@@ -156,7 +197,7 @@ const cleanup = (tempDir, jobId) => {
 app.post('/api/compile', async (req, res) => {
   console.log('Compile request received');
   try {
-    const { code } = req.body;
+    const { code, files, debug } = req.body;
     
     if (!code || code.trim() === '') {
       return res.json({
@@ -166,7 +207,7 @@ app.post('/api/compile', async (req, res) => {
     }
 
     console.log('Executing Java code...');
-    const result = await executeJava(code);
+    const result = await executeJava(code, files, debug);
     console.log('Java execution completed:', result.success);
     res.json(result);
   } catch (error) {
